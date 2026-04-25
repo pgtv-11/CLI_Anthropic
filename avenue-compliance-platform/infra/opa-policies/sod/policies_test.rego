@@ -41,6 +41,17 @@ test_two_distinct_sar_approvers_pass if {
 	not "sar-requires-two-distinct-approvers" in sod.denies with input as input
 }
 
+# Defends against the "same user wearing two hats" loophole: even with two
+# entries in the approvers list, if they're the same person, deny.
+test_duplicate_approver_id_denied if {
+	input := {
+		"subject": {"id": "bob", "roles": ["chief_compliance_officer"], "crd": "7654321"},
+		"action": "submit-filing",
+		"resource": {"kind": "sar", "id": "SAR-1", "draftedBy": "alice", "approvers": ["bob", "bob"]},
+	}
+	"sar-requires-two-distinct-approvers" in sod.denies with input as input
+}
+
 test_rep_cannot_approve_own_recommendation if {
 	input := {
 		"subject": {"id": "rep1", "roles": ["registered_rep"], "crd": "9000001"},

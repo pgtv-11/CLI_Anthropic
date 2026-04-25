@@ -27,6 +27,35 @@ export interface ProductSnapshot {
   alternativesConsidered: { productId: string; totalCostBps: number; rationale: string }[];
 }
 
+// A versioned thresholds bundle. Every parameter that affects a Reg BI
+// decision is keyed by ruleVersionId so that re-running the evaluator on an
+// archived recommendation reproduces the original decision bit-for-bit (P7).
+export interface RegBIThresholds {
+  ruleVersionId: string;
+  costMaterialityRatio: number; // chosen / cheapest alternative
+  riskIncompatibility: Record<string, ReadonlyArray<string>>;
+}
+
+export const REG_BI_THRESHOLDS: ReadonlyArray<RegBIThresholds> = [
+  {
+    ruleVersionId: 'regbi-2026-q2',
+    costMaterialityRatio: 1.5,
+    riskIncompatibility: {
+      CONSERVATIVE: ['HIGH', 'COMPLEX'],
+      MODERATE: ['COMPLEX'],
+      AGGRESSIVE: [],
+    },
+  },
+];
+
+export function getThresholds(ruleVersionId: string): RegBIThresholds {
+  const found = REG_BI_THRESHOLDS.find((t) => t.ruleVersionId === ruleVersionId);
+  if (!found) {
+    throw new Error(`Reg BI thresholds not found for ruleVersionId=${ruleVersionId}`);
+  }
+  return found;
+}
+
 export interface RegBIInput {
   profile: InvestmentProfile;
   recommendationKind: z.infer<typeof RecommendationKindSchema>;
@@ -41,20 +70,16 @@ export interface RegBIResult {
   reasons: string[];
   citations: string[];
   ruleVersionId: string;
+  thresholdsApplied: RegBIThresholds;
 }
-
-const RISK_INCOMPATIBILITY: Record<string, ReadonlyArray<string>> = {
-  CONSERVATIVE: ['HIGH', 'COMPLEX'],
-  MODERATE: ['COMPLEX'],
-  AGGRESSIVE: [],
-};
 
 export function evaluateRegBI(input: RegBIInput): RegBIResult {
   const reasons: string[] = [];
   const citations: string[] = ['SEC 17 CFR 240.15l-1'];
+  const thresholds = getThresholds(input.ruleVersionId);
 
   // Care Obligation — risk match.
-  const incompatible = RISK_INCOMPATIBILITY[input.profile.riskTolerance] ?? [];
+  const incompatible = thresholds.riskIncompatibility[input.profile.riskTolerance] ?? [];
   if (incompatible.includes(input.product.riskTier)) {
     reasons.push(
       `Care: product risk ${input.product.riskTier} incompatible with ` +
@@ -69,10 +94,11 @@ export function evaluateRegBI(input: RegBIInput): RegBIResult {
     const cheapest = Math.min(
       ...input.product.alternativesConsidered.map((a) => a.totalCostBps),
     );
-    if (input.product.totalCostBps > cheapest * 1.5) {
+    if (input.product.totalCostBps > cheapest * thresholds.costMaterialityRatio) {
       reasons.push(
         `Care: chosen product cost ${input.product.totalCostBps}bps materially exceeds ` +
-          `cheapest considered alternative (${cheapest}bps)`,
+          `cheapest considered alternative (${cheapest}bps) under threshold ` +
+          `${thresholds.costMaterialityRatio}x [${thresholds.ruleVersionId}]`,
       );
     }
   }
@@ -99,6 +125,7 @@ export function evaluateRegBI(input: RegBIInput): RegBIResult {
       ],
       citations,
       ruleVersionId: input.ruleVersionId,
+      thresholdsApplied: thresholds,
     };
   }
 
@@ -107,5 +134,6 @@ export function evaluateRegBI(input: RegBIInput): RegBIResult {
     reasons,
     citations,
     ruleVersionId: input.ruleVersionId,
+    thresholdsApplied: thresholds,
   };
 }

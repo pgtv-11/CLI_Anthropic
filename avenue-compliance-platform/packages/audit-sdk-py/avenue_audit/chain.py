@@ -41,6 +41,9 @@ class _LlmContext(BaseModel):
     response_hash: str
 
 
+Outcome = Literal["SUCCESS", "HANDLER_ERROR", "POLICY_DENY", "UNKNOWN"]
+
+
 class AuditEventInput(BaseModel):
     actor: str = Field(min_length=1)
     actor_role: str = Field(min_length=1)
@@ -54,6 +57,8 @@ class AuditEventInput(BaseModel):
     ip: str = Field(min_length=1)
     user_agent: Optional[str] = None
     rule_version_id: Optional[str] = None
+    outcome: Optional[Outcome] = None
+    outcome_details: Optional[dict[str, Any]] = None
     llm_context: Optional[_LlmContext] = None
 
     @field_validator("actor_crd")
@@ -75,6 +80,8 @@ class AuditEvent:
     target: dict[str, str]
     before_hash: Optional[str]
     after_hash: Optional[str]
+    outcome: Optional[Outcome]
+    outcome_hash: Optional[str]
     request_id: str
     session_id: str
     ip: str
@@ -140,6 +147,14 @@ class AuditClient:
         ts = self._clock().astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
         before_hash = hash_payload(parsed.before) if parsed.before else None
         after_hash = hash_payload(parsed.after) if parsed.after else None
+        if parsed.outcome_details is not None:
+            outcome_hash: Optional[str] = hash_payload(
+                {"outcome": parsed.outcome, "details": parsed.outcome_details}
+            )
+        elif parsed.outcome is not None:
+            outcome_hash = hash_payload({"outcome": parsed.outcome})
+        else:
+            outcome_hash = None
 
         for _ in range(self._max_retries):
             prev = self._head.get()
@@ -153,6 +168,8 @@ class AuditClient:
                 "target": parsed.target.model_dump(),
                 "before_hash": before_hash,
                 "after_hash": after_hash,
+                "outcome": parsed.outcome,
+                "outcome_hash": outcome_hash,
                 "request_id": parsed.request_id,
                 "session_id": parsed.session_id,
                 "ip": parsed.ip,

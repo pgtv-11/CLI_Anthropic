@@ -55,6 +55,11 @@ export class AuditClient {
     const ts = this.clock.now().toISOString();
     const beforeHash = parsed.before ? hashPayload(parsed.before) : undefined;
     const afterHash = parsed.after ? hashPayload(parsed.after) : undefined;
+    const outcomeHash = parsed.outcomeDetails
+      ? hashPayload({ outcome: parsed.outcome, details: parsed.outcomeDetails })
+      : parsed.outcome
+        ? hashPayload({ outcome: parsed.outcome })
+        : undefined;
 
     for (let attempt = 0; attempt < this.maxRetries; attempt++) {
       const prev = await this.head.get();
@@ -68,6 +73,8 @@ export class AuditClient {
         target: parsed.target,
         beforeHash,
         afterHash,
+        outcome: parsed.outcome,
+        outcomeHash,
         requestId: parsed.requestId,
         sessionId: parsed.sessionId,
         ip: parsed.ip,

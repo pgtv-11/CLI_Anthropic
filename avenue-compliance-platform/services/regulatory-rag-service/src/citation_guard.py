@@ -46,7 +46,12 @@ def _missing_citation_sentences(text: str) -> list[str]:
         s = sentence.strip()
         if not s:
             continue
-        if s.startswith(("- ", "* ")):
+        # Strip leading bullet markers but still inspect the substantive
+        # content — earlier versions skipped bullets entirely, which let
+        # un-cited assertions slip through inside lists.
+        if s.startswith(("- ", "* ", "• ")):
+            s = s[2:].lstrip()
+        if not s:
             continue
         if s.endswith("?"):
             continue

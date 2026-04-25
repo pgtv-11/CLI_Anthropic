@@ -18,6 +18,9 @@ export const AuditActionSchema = z.enum([
 ]);
 export type AuditAction = z.infer<typeof AuditActionSchema>;
 
+export const OutcomeSchema = z.enum(['SUCCESS', 'HANDLER_ERROR', 'POLICY_DENY', 'UNKNOWN']);
+export type Outcome = z.infer<typeof OutcomeSchema>;
+
 export const AuditEventInputSchema = z.object({
   actor: z.string().min(1),
   actorRole: z.string().min(1),
@@ -34,6 +37,11 @@ export const AuditEventInputSchema = z.object({
   ip: z.string().min(1),
   userAgent: z.string().optional(),
   ruleVersionId: z.string().optional(),
+  // Final outcome of the gated handler. Captured cryptographically so that
+  // an examiner reading the chain can distinguish "authorized but failed"
+  // from "authorized and succeeded" without reading external logs.
+  outcome: OutcomeSchema.optional(),
+  outcomeDetails: z.record(z.unknown()).optional(),
   llmContext: z
     .object({
       model: z.string(),
@@ -54,6 +62,8 @@ export interface AuditEvent {
   target: { kind: string; id: string };
   beforeHash: string | undefined;
   afterHash: string | undefined;
+  outcome: Outcome | undefined;
+  outcomeHash: string | undefined;
   requestId: string;
   sessionId: string;
   ip: string;

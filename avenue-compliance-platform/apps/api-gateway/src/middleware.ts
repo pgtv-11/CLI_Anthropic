@@ -48,24 +48,51 @@ export async function gate<T>(
 
   const decision = await ctx.policy.authorize(policyInput);
 
-  await ctx.audit.record({
-    actor: req.subject.id,
-    actorRole: req.subject.roles[0] ?? 'unknown',
-    actorCrd: req.subject.crd,
-    action: decision.allow ? mapAction(action) : 'REJECT',
-    target: { kind: resource.kind, id: resource.id },
-    requestId: req.requestId,
-    sessionId: req.sessionId,
-    ip: req.ip,
-    after: decision.allow ? undefined : { denies: decision.denies },
-  });
-
   if (!decision.allow) {
+    await ctx.audit.record({
+      actor: req.subject.id,
+      actorRole: req.subject.roles[0] ?? 'unknown',
+      actorCrd: req.subject.crd,
+      action: 'REJECT',
+      target: { kind: resource.kind, id: resource.id },
+      requestId: req.requestId,
+      sessionId: req.sessionId,
+      ip: req.ip,
+      outcome: 'POLICY_DENY',
+      outcomeDetails: { denies: decision.denies },
+    });
     const err = new Error(`forbidden: ${decision.denies.join(', ')}`);
     (err as Error & { statusCode: number }).statusCode = 403;
     throw err;
   }
-  return handler();
+
+  let outcome: 'SUCCESS' | 'HANDLER_ERROR' = 'SUCCESS';
+  let handlerError: Error | undefined;
+  let result: T | undefined;
+  try {
+    result = await handler();
+  } catch (err) {
+    outcome = 'HANDLER_ERROR';
+    handlerError = err as Error;
+  }
+
+  await ctx.audit.record({
+    actor: req.subject.id,
+    actorRole: req.subject.roles[0] ?? 'unknown',
+    actorCrd: req.subject.crd,
+    action: mapAction(action),
+    target: { kind: resource.kind, id: resource.id },
+    requestId: req.requestId,
+    sessionId: req.sessionId,
+    ip: req.ip,
+    outcome,
+    outcomeDetails: handlerError
+      ? { errorClass: handlerError.constructor.name, message: handlerError.message }
+      : undefined,
+  });
+
+  if (handlerError) throw handlerError;
+  return result as T;
 }
 
 function mapAction(action: string): 'CREATE' | 'READ' | 'UPDATE' | 'DELETE' | 'EXPORT' | 'APPROVE' | 'OVERRIDE' | 'ESCALATE' | 'SUBMIT_FILING' {

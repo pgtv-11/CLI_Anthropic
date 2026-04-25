@@ -62,19 +62,24 @@ deny_compensation_conflict if {
 }
 
 # ---------------------------------------------------------------------------
-# 4. AML/SAR: drafter cannot file alone — requires a second compliance officer.
+# 4. AML/SAR: drafter cannot file alone — requires two *distinct people*
+#    (not just two distinct entries; one user wearing two hats does not count).
 # ---------------------------------------------------------------------------
 
-deny_solo_sar_filing if {
-	input.resource.kind == "sar"
-	input.action == "submit-filing"
-	count(object.get(input.resource, "approvers", [])) < 2
+distinct_sar_approvers contains a if {
+	some a in object.get(input.resource, "approvers", [])
 }
 
 deny_solo_sar_filing if {
 	input.resource.kind == "sar"
 	input.action == "submit-filing"
-	some a in object.get(input.resource, "approvers", [])
+	count(distinct_sar_approvers) < 2
+}
+
+deny_solo_sar_filing if {
+	input.resource.kind == "sar"
+	input.action == "submit-filing"
+	some a in distinct_sar_approvers
 	a == input.resource.draftedBy
 }
 

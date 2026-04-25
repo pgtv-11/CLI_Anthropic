@@ -14,7 +14,15 @@ def sha256_hex(data: str) -> str:
 
 
 def canonical_json(value: Any) -> str:
-    """Deterministic JSON: keys sorted, no whitespace. Must match the TS impl."""
+    """Deterministic JSON: keys sorted, no whitespace, literal UTF-8.
+
+    Must produce byte-for-byte identical output to the TypeScript SDK's
+    ``canonicalJson``. Node's ``JSON.stringify`` emits non-ASCII characters
+    as literal UTF-8 (it does NOT escape to ``\\uXXXX``); we therefore use
+    ``ensure_ascii=False`` so both SDKs hash identical UTF-8 byte sequences.
+    A regression here would diverge the chain across languages — see the
+    cross-language vector test.
+    """
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 

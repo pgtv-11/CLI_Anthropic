@@ -31,11 +31,17 @@ class WashTradingConfig:
 
 
 class AccountLinkage:
-    """Beneficial-owner linkage map. In production: backed by KYC service."""
+    """Beneficial-owner linkage map. In production: backed by KYC service.
 
-    def __init__(self, links: dict[str, str]) -> None:
+    The ``version_id`` is the KYC snapshot identifier that produced this
+    map; we propagate it into every alert so that re-evaluation later uses
+    the exact same beneficial-owner state, even if KYC has since changed.
+    """
+
+    def __init__(self, links: dict[str, str], version_id: str) -> None:
         # account_id -> beneficial_owner_id
         self._links = links
+        self.version_id = version_id
 
     def beneficial_owner(self, account_id: str) -> str | None:
         return self._links.get(account_id)
@@ -91,6 +97,7 @@ class WashTradingScenario:
                             symbols=[symbol],
                             evidence_exec_ids=[a.exec_id, b.exec_id],
                             rule_anchors=list(self.cfg.rule_anchors),
+                            data_version_id=self._linkage.version_id,
                         )
                     )
         return alerts

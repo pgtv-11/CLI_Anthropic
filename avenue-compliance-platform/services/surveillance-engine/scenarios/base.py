@@ -51,6 +51,11 @@ class Alert:
     symbols: list[str]
     evidence_exec_ids: list[str]
     rule_anchors: list[str]
+    # Identifier of the data version that drove the correlation (e.g., the
+    # KYC linkage snapshot for wash-trading, or the restricted-list snapshot
+    # for insider-proximity). Required so that re-evaluating the alert later
+    # uses the *same* data state, not whatever the warehouse has today.
+    data_version_id: str
 
 
 class Scenario(Protocol):

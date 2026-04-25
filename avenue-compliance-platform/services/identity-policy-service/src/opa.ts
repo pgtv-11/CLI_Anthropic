@@ -45,15 +45,24 @@ export class OpaClient {
 export class CompositePolicyEngine {
   constructor(private readonly opa: OpaClient) {}
 
+  /**
+   * Authorize a request through three independent OPA bundles.
+   *
+   * Order: examiner-mode → SoD → RBAC. **All three** must allow; any deny is
+   * terminal. The SoD bundle internally references RBAC (via
+   * ``data.avenue.rbac.allow``) so a single-bundle deployment still works,
+   * but we evaluate RBAC explicitly here as defence-in-depth: if one bundle
+   * is misconfigured or unloaded, the other still enforces.
+   */
   async authorize(input: PolicyInput): Promise<PolicyDecision> {
-    // Order matters: examiner mode → SoD → RBAC. Examiner mode short-circuits
-    // mutating actions; SoD blocks self-approvals; RBAC is the base layer.
     if (input.subject.roles.includes('examiner_external')) {
       const examiner = await this.opa.evaluate('avenue/examiner', input);
       if (!examiner.allow) return examiner;
     }
     const sod = await this.opa.evaluate('avenue/sod', input);
     if (!sod.allow) return sod;
-    return sod;
+    const rbac = await this.opa.evaluate('avenue/rbac', input);
+    if (!rbac.allow) return rbac;
+    return { allow: true, denies: [], examinerOverride: false };
   }
 }

@@ -7,8 +7,17 @@
 # Status legend: planned | partial | implemented | tested | audited
 # Every PR that touches a rule's implementation MUST update the matching row.
 
-version: "2026.04.0"
+version: "2026.04.1"
 last_reviewed: "2026-04-25"
+round_2_changes:
+  - "audit-sdk: cross-language hash-chain compatibility test (TS ↔ Py)"
+  - "audit-sdk: outcome + outcomeHash field added (P1 lineage)"
+  - "OPA SoD: distinct-approver enforcement for SAR filing"
+  - "Reg BI: cost materiality threshold versioned by ruleVersionId"
+  - "Surveillance: kyc data_version_id propagated into Alert"
+  - "Evidence packager: deterministic PDF render (fixed creation date)"
+  - "Identity service: explicit RBAC evaluation in CompositePolicyEngine"
+  - "Citation guard: bullet-list assertions now checked"
 ccp_owner: "chief_compliance_officer"
 
 controls:

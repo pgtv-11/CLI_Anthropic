@@ -39,6 +39,11 @@ class CaseDescriptor:
     actors: list[dict[str, str]]
     timeline: list[dict[str, str]]
     items: list[EvidenceItem]
+    # Frozen timestamp used as the PDF/A creation date so re-runs of the
+    # packager against the same case produce byte-identical output (P7).
+    # Examiners verify integrity by SHA-256 of the report — any drift breaks
+    # the manifest signature.
+    case_effective_at: datetime
 
 
 class Signer(Protocol):
@@ -64,11 +69,21 @@ class WormStore(Protocol):
 
 
 def render_pdf(case: CaseDescriptor) -> bytes:
-    """Render a deterministic case report. Avoids time-dependent metadata."""
+    """Render a deterministic case report. Pins all time-dependent metadata
+    to ``case.case_effective_at`` so SHA-256 of the output is reproducible.
+    """
     buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=LETTER)
+    # ReportLab's invariant=True forces deterministic PDF object IDs and
+    # eliminates the random ID array; combined with a fixed creation date
+    # below, this gives byte-identical output across runs.
+    c = canvas.Canvas(buf, pagesize=LETTER, invariant=True)
     c.setTitle(f"Avenue Evidence — {case.case_id}")
     c.setAuthor("Avenue Compliance Platform")
+    c.setSubject(f"{case.case_kind}/{case.case_id}")
+    # Pin both the ``CreationDate`` and ``ModDate`` PDF metadata fields.
+    fixed_str = case.case_effective_at.strftime("D:%Y%m%d%H%M%S+00'00'")
+    c._doc.info.creationDate = fixed_str  # type: ignore[attr-defined]
+    c._doc.info.modDate = fixed_str  # type: ignore[attr-defined]
 
     y = 750
     c.setFont("Helvetica-Bold", 16)
@@ -128,6 +143,12 @@ def build_manifest(case: CaseDescriptor, pdf_digest: str) -> dict[str, Any]:
         }
         for item in case.items
     ]
+    # ``effective_at`` is the bitemporal anchor of the case (e.g., the alert
+    # ts or the SAR draft ts). It drives PDF metadata and, here, the manifest
+    # so that a second run produces an identical manifest byte sequence.
+    effective_iso = case.case_effective_at.astimezone(timezone.utc).isoformat().replace(
+        "+00:00", "Z"
+    )
     return {
         "version": 1,
         "case_id": case.case_id,
@@ -137,7 +158,7 @@ def build_manifest(case: CaseDescriptor, pdf_digest: str) -> dict[str, Any]:
         "timeline": case.timeline,
         "items": items_manifest,
         "report_pdf_sha256": pdf_digest,
-        "generated_at": datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+        "effective_at": effective_iso,
     }
 
 

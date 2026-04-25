@@ -31,3 +31,12 @@ def test_assertion_without_citation_blocked():
     result = guard(text, {"FINRA 3110"})
     assert not result.accepted
     assert any("missing_citation_in" in r for r in result.reasons)
+
+
+def test_bullet_list_assertion_without_citation_blocked():
+    # Round 2 fix: previously the lexer skipped bullets entirely, so
+    # uncited assertions inside lists were accepted.
+    text = "- The rule requires written procedures."
+    result = guard(text, {"FINRA 3110"})
+    assert not result.accepted
+    assert any("missing_citation_in" in r for r in result.reasons)

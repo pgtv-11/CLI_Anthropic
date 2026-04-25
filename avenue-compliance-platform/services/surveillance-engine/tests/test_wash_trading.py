@@ -29,7 +29,7 @@ T0 = datetime(2026, 4, 1, 14, 30, tzinfo=timezone.utc)
 
 def test_linked_accounts_opposite_sides_trigger_alert():
     cfg = example_config()
-    linkage = AccountLinkage({"ACC-1": "BO-42", "ACC-2": "BO-42"})
+    linkage = AccountLinkage({"ACC-1": "BO-42", "ACC-2": "BO-42"}, version_id="kyc-2026-04-01")
     scenario = WashTradingScenario(cfg, linkage)
     execs = [
         _exec("E1", "ACC-1", Side.BUY, 100, 150, T0),
@@ -43,7 +43,9 @@ def test_linked_accounts_opposite_sides_trigger_alert():
 
 def test_unlinked_accounts_do_not_alert():
     cfg = example_config()
-    linkage = AccountLinkage({"ACC-1": "BO-42", "ACC-2": "BO-99"})
+    linkage = AccountLinkage(
+        {"ACC-1": "BO-42", "ACC-2": "BO-99"}, version_id="kyc-2026-04-01"
+    )
     scenario = WashTradingScenario(cfg, linkage)
     execs = [
         _exec("E1", "ACC-1", Side.BUY, 100, 150, T0),
@@ -52,9 +54,21 @@ def test_unlinked_accounts_do_not_alert():
     assert scenario.evaluate(execs) == []
 
 
+def test_alert_carries_kyc_version_for_reproducibility():
+    cfg = example_config()
+    linkage = AccountLinkage({"ACC-1": "BO-42", "ACC-2": "BO-42"}, version_id="kyc-2026-04-01")
+    scenario = WashTradingScenario(cfg, linkage)
+    execs = [
+        _exec("E1", "ACC-1", Side.BUY, 100, 150, T0),
+        _exec("E2", "ACC-2", Side.SELL, 100, 150, T0 + timedelta(seconds=5)),
+    ]
+    [alert] = scenario.evaluate(execs)
+    assert alert.data_version_id == "kyc-2026-04-01"
+
+
 def test_outside_time_window_does_not_alert():
     cfg = example_config()
-    linkage = AccountLinkage({"ACC-1": "BO-42", "ACC-2": "BO-42"})
+    linkage = AccountLinkage({"ACC-1": "BO-42", "ACC-2": "BO-42"}, version_id="kyc-2026-04-01")
     scenario = WashTradingScenario(cfg, linkage)
     execs = [
         _exec("E1", "ACC-1", Side.BUY, 100, 150, T0),
