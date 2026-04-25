@@ -1,0 +1,24 @@
+[project]
+name = "evidence-packager"
+version = "0.1.0"
+description = "Deterministic evidence package generator (P5). PDF/A + signed JSON manifest."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.7",
+  "reportlab>=4.2",
+  "boto3>=1.35",
+  "cryptography>=43.0",
+  "avenue-audit-sdk",
+]
+
+[tool.uv.sources]
+avenue-audit-sdk = { path = "../../packages/audit-sdk-py" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

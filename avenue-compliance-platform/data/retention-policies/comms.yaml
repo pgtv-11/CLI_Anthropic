@@ -1,0 +1,33 @@
+policy_id: retention-comms
+policy_version: "2026.04.0"
+rule_anchors:
+  - SEC 17 CFR 240.17a-4(b)(4)
+  - FINRA 4511
+description: |
+  Retention policy for electronic communications captured by the comms-capture
+  service. Aligns to SEC 17a-4 (minimum 3 years easily accessible) and FINRA
+  4511 (life of firm + standard periods).
+defaults:
+  retention_years: 7
+  easily_accessible_years: 3
+  storage: s3-object-lock-compliance
+classes:
+  - class: customer-correspondence
+    retention_years: 7
+    easily_accessible_years: 3
+  - class: marketing-public
+    retention_years: 7
+    easily_accessible_years: 3
+    requires_principal_approval: true
+  - class: internal-supervisory
+    retention_years: 7
+    easily_accessible_years: 3
+  - class: voice-recording
+    retention_years: 3
+    easily_accessible_years: 3
+legal_holds:
+  override_disposal: true
+  approval_required: chief_compliance_officer
+disposal_workflow:
+  pre_disposal_review_days: 30
+  notify: ["compliance-engineering@avenue.us", "legal@avenue.us"]

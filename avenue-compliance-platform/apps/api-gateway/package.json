@@ -1,0 +1,21 @@
+{
+  "name": "@avenue/api-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Edge API gateway — auth, audit, policy enforcement.",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'gateway: integration tests live in tests/'",
+    "lint": "echo 'todo: eslint'"
+  },
+  "dependencies": {
+    "@avenue/audit-sdk": "workspace:*",
+    "@avenue/identity-policy-service": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

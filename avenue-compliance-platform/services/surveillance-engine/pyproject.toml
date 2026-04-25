@@ -1,0 +1,20 @@
+[project]
+name = "surveillance-engine"
+version = "0.1.0"
+description = "Trade surveillance engine — scenario library + replay harness (M3, F3)."
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.7",
+  "pyyaml>=6.0",
+  "avenue-audit-sdk",
+]
+
+[tool.uv.sources]
+avenue-audit-sdk = { path = "../../packages/audit-sdk-py" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["scenarios", "engine"]
