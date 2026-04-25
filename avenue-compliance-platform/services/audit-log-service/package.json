@@ -1,0 +1,20 @@
+{
+  "name": "@avenue/audit-log-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Audit log sink (P1) — Kafka producer + S3 Object Lock writer.",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'audit-log-service: integration tests live in tests/'",
+    "lint": "echo 'todo: eslint'"
+  },
+  "dependencies": {
+    "@avenue/audit-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

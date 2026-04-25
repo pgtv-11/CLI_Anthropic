@@ -1,0 +1,27 @@
+scenario_id: wash-trading
+scenario_version: "2026.04.0"
+rule_version_id: "finra-2026-q2"
+rule_anchors:
+  - FINRA 5210
+  - FINRA 6140
+  - SEC 15c3-5
+description: |
+  Detect candidates for wash trading: opposite-side executions in the same
+  symbol with similar quantity and price, within a short time window, where
+  both accounts map to the same beneficial owner.
+parameters:
+  time_window_seconds: 30
+  qty_tolerance_pct: 0.02
+  price_tolerance_pct: 0.005
+  min_score: 0.6
+severity_thresholds:
+  medium: 0.6
+  high: 0.85
+review_workflow:
+  l1_role: surveillance_analyst
+  l2_role: senior_surveillance_analyst
+  escalation_role: chief_compliance_officer
+  closure_requires_two_reviewers: true
+testing:
+  golden_set: tests/surveillance-backtest/wash-trading-golden.jsonl
+  min_recall_pct: 95

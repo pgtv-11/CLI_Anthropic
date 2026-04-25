@@ -1,0 +1,226 @@
+# Avenue Compliance Platform — Controls Matrix
+#
+# This file is the single source of truth mapping each FINRA / SEC rule in
+# scope to (a) a named control, (b) the service/file that implements it, and
+# (c) the test that proves it. Examiners ask for this artifact first.
+#
+# Status legend: planned | partial | implemented | tested | audited
+# Every PR that touches a rule's implementation MUST update the matching row.
+
+version: "2026.04.2"
+last_reviewed: "2026-04-25"
+round_2_changes:
+  - "audit-sdk: cross-language hash-chain compatibility test (TS ↔ Py)"
+  - "audit-sdk: outcome + outcomeHash field added (P1 lineage)"
+  - "OPA SoD: distinct-approver enforcement for SAR filing"
+  - "Reg BI: cost materiality threshold versioned by ruleVersionId"
+  - "Surveillance: kyc data_version_id propagated into Alert"
+  - "Evidence packager: deterministic PDF render (fixed creation date)"
+  - "Identity service: explicit RBAC evaluation in CompositePolicyEngine"
+  - "Citation guard: bullet-list assertions now checked"
+round_3_changes:
+  - "audit-sdk: schemaVersion field with v1↔v2 dispatch in verifyChain (back-compat)"
+  - "audit-sdk: v1 backward-compatibility test fixture (TS + Py)"
+  - "evidence-packager: filename whitelist + reserved-name guard against S3 key injection"
+  - "evidence-packager: ReportLab tightly version-pinned (4.2.x) for determinism"
+  - "API gateway: two-phase audit (intent UNKNOWN → outcome SUCCESS/HANDLER_ERROR), audit-sink failure surfaces 5xx"
+  - "Reg BI: typed UnknownRuleVersionError so handler can map to POLICY_DENY"
+  - "Reg BI: handleRegBI wrapper converts unknown ruleVersionId into structured deny instead of HANDLER_ERROR"
+  - "identity-policy-service: HMAC-SHA256 watermark for examiner sessions; verifyExaminerSession with timing-safe compare"
+ccp_owner: "chief_compliance_officer"
+
+controls:
+  # ─── M1. KYC / AML / CIP ──────────────────────────────────────────────────
+  - id: KYC-001
+    rule: "31 CFR 1023.220 (USA PATRIOT Act CIP)"
+    control: "Customer Identification Program — collect, verify, retain identifying info"
+    module: kyc-aml-service
+    implementation: services/kyc-aml-service/src/cip
+    evidence: tests/regbi-walkthrough/cip-sampling.md
+    status: planned
+
+  - id: AML-001
+    rule: "FINRA 3310 / BSA"
+    control: "AML compliance program: written program, designated AML officer, training, independent test"
+    module: kyc-aml-service
+    implementation: services/kyc-aml-service/src/screening
+    evidence: docs/runbooks/sar-filing.md
+    status: planned
+
+  - id: AML-002
+    rule: "31 CFR 1010 (OFAC SDN screening)"
+    control: "Sanctions screening at onboarding + ongoing"
+    module: kyc-aml-service
+    implementation: services/kyc-aml-service/src/screening
+    evidence: tests/regbi-walkthrough/ofac-sampling.md
+    status: planned
+
+  - id: AML-003
+    rule: "31 CFR 1010.320 (SAR)"
+    control: "Suspicious Activity Report drafting, dual approval, FinCEN E-File submission"
+    module: kyc-aml-service
+    implementation: services/kyc-aml-service/src/sar
+    sod_policy: infra/opa-policies/sod/policies.rego (deny_solo_sar_filing)
+    evidence: docs/runbooks/sar-filing.md
+    status: planned
+
+  # ─── M2. Suitability / Reg BI ────────────────────────────────────────────
+  - id: REGBI-001
+    rule: "SEC 17 CFR 240.15l-1 (Reg BI — Care Obligation)"
+    control: "Pre-trade Reg BI check evaluating cost/risk/alternatives"
+    module: suitability-regbi-service
+    implementation: services/suitability-regbi-service/src/recommendation
+    evidence: tests/regbi-walkthrough/care-walkthrough.md
+    status: planned
+
+  - id: REGBI-002
+    rule: "SEC 17 CFR 240.15l-1 (Reg BI — Disclosure Obligation)"
+    control: "Form CRS delivery tracking; material conflict disclosures"
+    module: suitability-regbi-service
+    implementation: services/suitability-regbi-service/src/form-crs
+    evidence: tests/regbi-walkthrough/form-crs-delivery.md
+    status: planned
+
+  - id: REGBI-003
+    rule: "SEC 17 CFR 240.15l-1 (Reg BI — Conflict Obligation)"
+    control: "Conflict declarations linked to recommendation events"
+    module: suitability-regbi-service
+    implementation: services/suitability-regbi-service/src/recommendation
+    sod_policy: infra/opa-policies/sod/policies.rego (deny_self_recommendation_approval)
+    status: planned
+
+  - id: SUIT-001
+    rule: "FINRA 2111"
+    control: "Investor profile capture and versioning"
+    module: suitability-regbi-service
+    implementation: services/suitability-regbi-service/src/profile
+    status: planned
+
+  # ─── M3. Trade Surveillance & Supervision ────────────────────────────────
+  - id: SUP-001
+    rule: "FINRA 3110 (Supervision)"
+    control: "Written Supervisory Procedures (WSPs) versioned and tested"
+    module: surveillance-engine
+    implementation: data/wsps/
+    evidence: tests/mock-exam/wsp-walkthrough.md
+    status: planned
+
+  - id: SURV-001
+    rule: "FINRA 5210 / FINRA 6140"
+    control: "Wash trading / matched orders detection"
+    module: surveillance-engine
+    implementation: services/surveillance-engine/scenarios/wash_trading.py
+    config: data/surveillance-scenarios/wash-trading.yaml
+    evidence: services/surveillance-engine/tests/test_wash_trading.py
+    status: implemented
+
+  - id: SURV-002
+    rule: "FINRA 5210 (manipulative activity)"
+    control: "Layering / spoofing detection"
+    module: surveillance-engine
+    implementation: services/surveillance-engine/scenarios/layering.py
+    status: planned
+
+  - id: SURV-003
+    rule: "FINRA 5210"
+    control: "Marking the close detection"
+    module: surveillance-engine
+    implementation: services/surveillance-engine/scenarios/marking_the_close.py
+    status: planned
+
+  - id: SURV-004
+    rule: "FINRA 5270 / SEC 10b-5"
+    control: "Front running detection"
+    module: surveillance-engine
+    implementation: services/surveillance-engine/scenarios/front_running.py
+    status: planned
+
+  - id: SURV-005
+    rule: "SEC 10b-5 / Reg M"
+    control: "Insider trading proximity (restricted list × earnings calendar)"
+    module: surveillance-engine
+    implementation: services/surveillance-engine/scenarios/insider_proximity.py
+    status: planned
+
+  # ─── M4. Books & Records + Communications ────────────────────────────────
+  - id: BR-001
+    rule: "SEC 17 CFR 240.17a-3"
+    control: "Records to be made (orders, executions, customer accounts, communications)"
+    module: records-archive-service
+    implementation: services/records-archive-service/src/worm
+    status: planned
+
+  - id: BR-002
+    rule: "SEC 17 CFR 240.17a-4(f)"
+    control: "Non-rewriteable / non-erasable storage (WORM)"
+    module: records-archive-service
+    implementation: infra/terraform/s3-object-lock/main.tf
+    config: infra/terraform/s3-object-lock/variables.tf
+    evidence: tests/retention-tests/test_worm_immutability.md
+    status: implemented
+
+  - id: BR-003
+    rule: "FINRA 4511"
+    control: "Books and records preservation timelines"
+    module: records-archive-service
+    implementation: data/retention-policies/comms.yaml
+    status: implemented
+
+  - id: COMM-001
+    rule: "FINRA 2210 (communications with the public)"
+    control: "Principal review and FINRA Ad Reg filing for retail communications"
+    module: comms-capture-service
+    implementation: services/comms-capture-service/src/review
+    sod_policy: infra/opa-policies/sod/policies.rego (deny_marketing_self_review)
+    status: planned
+
+  - id: COMM-002
+    rule: "FINRA 3110.06-.09"
+    control: "Correspondence and internal communications review"
+    module: comms-capture-service
+    implementation: services/comms-capture-service/src/capture
+    status: planned
+
+  # ─── Cross-cutting (P1–P7) ────────────────────────────────────────────────
+  - id: P1-001
+    rule: "Industry best practice — immutable audit trail"
+    control: "Hash-chained append-only audit log"
+    implementation: packages/audit-sdk/src/chain.ts
+    sibling: packages/audit-sdk-py/avenue_audit/chain.py
+    evidence: packages/audit-sdk/src/chain.test.ts
+    status: implemented
+
+  - id: P3-001
+    rule: "FINRA 3110 (supervision) — segregation of duties"
+    control: "OPA policy bundle enforcing SoD across modules"
+    implementation: infra/opa-policies/sod/policies.rego
+    evidence: infra/opa-policies/sod/policies_test.rego
+    status: implemented
+
+  - id: P4-001
+    rule: "FINRA 8210 (regulator inquiry)"
+    control: "Examiner Mode read-only portal with watermark and audited queries"
+    implementation: apps/web-examiner-portal
+    sibling: infra/opa-policies/examiner-mode/policies.rego
+    status: partial
+
+  - id: P5-001
+    rule: "FINRA 8210 + 17a-4 evidence packages"
+    control: "Deterministic evidence package generator"
+    implementation: services/evidence-packager/src/packager.py
+    status: implemented
+
+  - id: P6-001
+    rule: "Internal best practice — assistive AI"
+    control: "Regulatory RAG with citation guardrails (Claude API)"
+    implementation: services/regulatory-rag-service/src/rag.py
+    sibling: services/regulatory-rag-service/src/citation_guard.py
+    evidence: services/regulatory-rag-service/tests/test_citation_guard.py
+    status: implemented
+
+  - id: CERT-001
+    rule: "FINRA 3130"
+    control: "Annual CEO certification of compliance & supervisory processes"
+    module: identity-policy-service
+    implementation: docs/runbooks/ceo-certification.md
+    status: planned

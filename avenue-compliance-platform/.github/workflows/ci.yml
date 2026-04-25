@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  ts-monorepo:
+    name: TypeScript build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: avenue-compliance-platform/pnpm-lock.yaml
+      - working-directory: avenue-compliance-platform
+        run: pnpm install --frozen-lockfile
+      - working-directory: avenue-compliance-platform
+        run: pnpm typecheck
+      - working-directory: avenue-compliance-platform
+        run: pnpm -r --parallel build
+      - working-directory: avenue-compliance-platform
+        run: pnpm -r --filter "@avenue/audit-sdk" --filter "@avenue/suitability-regbi-service" --filter "@avenue/comms-capture-service" test
+
+  python-services:
+    name: Python services test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - packages/audit-sdk-py
+          - services/regulatory-rag-service
+          - services/surveillance-engine
+          - services/evidence-packager
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Install uv
+        run: pip install uv
+      - working-directory: avenue-compliance-platform/${{ matrix.service }}
+        run: |
+          uv venv
+          uv pip install -e .
+          uv pip install pytest
+          uv run pytest -q
+
+  opa-policies:
+    name: OPA policy tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OPA
+        run: |
+          curl -L -o opa https://openpolicyagent.org/downloads/v0.69.0/opa_linux_amd64_static
+          chmod +x opa && sudo mv opa /usr/local/bin/opa
+      - name: SoD + RBAC tests
+        working-directory: avenue-compliance-platform/infra/opa-policies
+        run: opa test sod rbac examiner-mode -v
+
+  terraform-validate:
+    name: Terraform fmt + validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.7.5 }
+      - working-directory: avenue-compliance-platform/infra/terraform/s3-object-lock
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
+
+  controls-matrix-lint:
+    name: Controls matrix sanity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Validate controls-matrix.yaml
+        working-directory: avenue-compliance-platform
+        run: |
+          python - <<'PY'
+          import sys, yaml, pathlib
+          path = pathlib.Path('docs/regulatory-mapping/controls-matrix.yaml')
+          data = yaml.safe_load(path.read_text())
+          assert 'controls' in data and len(data['controls']) >= 10, "controls-matrix must list >=10 controls"
+          for c in data['controls']:
+              for k in ('id', 'rule', 'control', 'status'):
+                  assert k in c, f"missing {k} in {c.get('id')}"
+              assert c['status'] in {'planned','partial','implemented','tested','audited'}, c
+          print(f"controls-matrix OK — {len(data['controls'])} controls")
+          PY
