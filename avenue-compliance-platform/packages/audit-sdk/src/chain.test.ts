@@ -66,3 +66,38 @@ test('canonical hashing is deterministic across key order', async () => {
   });
   assert.match(ev.afterHash!, /^[0-9a-f]{64}$/);
 });
+
+// Mirrors packages/audit-sdk-py/tests/test_v1_backcompat.py — pre-Round-2
+// events did not include schemaVersion/outcome/outcomeHash in the hashed
+// body. The v1↔v2 dispatch in verifyChain must keep both forms verifiable.
+test('verifyChain accepts a synthetic v1 event', async () => {
+  const { canonicalJson, sha256Hex } = await import('./hash.js');
+  const v1Body = {
+    eventId: '11111111-1111-4111-8111-111111111111',
+    ts: '2025-09-01T00:00:00.000Z',
+    actor: 'alice',
+    actorRole: 'compliance_officer',
+    actorCrd: undefined,
+    action: 'CREATE' as const,
+    target: { kind: 'sar', id: 'SAR-2025-0001' },
+    beforeHash: undefined,
+    afterHash: undefined,
+    requestId: '22222222-2222-4222-8222-222222222222',
+    sessionId: '33333333-3333-4333-8333-333333333333',
+    ip: '10.0.0.1',
+    userAgent: undefined,
+    ruleVersionId: undefined,
+    llmContext: undefined,
+    prevChainHash: GENESIS_HASH,
+  };
+  const chainHash = sha256Hex(canonicalJson(v1Body));
+  const v1Event = {
+    schemaVersion: 1 as const,
+    ...v1Body,
+    outcome: undefined,
+    outcomeHash: undefined,
+    chainHash,
+  };
+  const result = verifyChain([v1Event]);
+  assert.equal(result.valid, true);
+});
