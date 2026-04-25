@@ -7,7 +7,11 @@ dependencies = [
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
   "pydantic>=2.7",
-  "reportlab>=4.2",
+  # ReportLab is pinned to a tight range because evidence-package
+  # determinism relies on the internal ``_doc.info`` shape (CreationDate /
+  # ModDate). Bumping this dependency requires re-running the deterministic
+  # render fixture in tests/test_packager.py and inspecting the produced PDF.
+  "reportlab>=4.2,<4.3",
   "boto3>=1.35",
   "cryptography>=43.0",
   "avenue-audit-sdk",

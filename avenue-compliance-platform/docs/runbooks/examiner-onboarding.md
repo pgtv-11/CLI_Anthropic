@@ -6,9 +6,10 @@
 ## Provisioning
 
 1. CCO + Identity admin (dual approval) create an examiner identity in Okta, group `examiner_external`.
-2. The Okta SSO assertion produces a session containing `roles: ["examiner_external"]` and an `examinerSession` claim with `id`, `expiresAt` (≤ engagement end), and `watermark="EXAMINER_SESSION"`.
-3. RBAC bundle grants the `examiner_external` role only `read` and `export` on the resource kinds listed in `infra/opa-policies/rbac/policies.rego`.
-4. Examiner-mode bundle (`infra/opa-policies/examiner-mode/policies.rego`) explicitly denies any mutating action and verifies session non-expiry on every request.
+2. The Okta SSO assertion produces a session containing `roles: ["examiner_external"]` and an `examinerSession` payload (`id`, `expiresAt` ≤ engagement end, `issuedAt`, `examinerCrd`, `matterId`). The identity service signs the payload with an HMAC-SHA256 over the canonical (sorted-key) JSON using a server-side secret stored in AWS Secrets Manager. The `watermark` field is the resulting hex MAC.
+3. The API gateway calls `verifyExaminerSession()` *before* every request reaches OPA — OPA never sees a raw client claim. A forged or mutated session is rejected with `watermark-mismatch`; an expired session is rejected with `session-expired`.
+4. RBAC bundle grants the `examiner_external` role only `read` and `export` on the resource kinds listed in `infra/opa-policies/rbac/policies.rego`.
+5. Examiner-mode bundle (`infra/opa-policies/examiner-mode/policies.rego`) explicitly denies any mutating action and verifies session non-expiry on every request.
 
 ## During engagement
 

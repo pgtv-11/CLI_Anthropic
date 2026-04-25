@@ -34,3 +34,15 @@ def test_manifest_pins_effective_at():
     m = build_manifest(case, pdf_digest="deadbeef")
     assert m["effective_at"] == "2026-04-01T14:30:00Z"
     assert m["report_pdf_sha256"] == "deadbeef"
+
+
+def test_unsafe_item_name_rejected():
+    import pytest
+    from src.packager import EvidenceItem
+
+    with pytest.raises(ValueError):
+        EvidenceItem(name="../../etc/passwd", content_type="text/plain", bytes=b"x")
+    with pytest.raises(ValueError):
+        EvidenceItem(name="manifest.json", content_type="application/json", bytes=b"{}")
+    with pytest.raises(ValueError):
+        EvidenceItem(name="bad/path.txt", content_type="text/plain", bytes=b"x")

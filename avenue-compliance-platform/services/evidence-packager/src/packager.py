@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Protocol
@@ -22,6 +23,28 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfgen import canvas
 
+# Whitelist for evidence-item filenames written into S3. Anything else is
+# rejected — defence against path traversal (e.g. ``../manifest.json``) and
+# S3 key injection that could overwrite manifest/signature siblings within
+# the same prefix. WORM Object Lock prevents *deletion* but a fresh PUT to
+# an existing key creates a new version, hiding the original from non-versioned
+# reads — so input validation is the only safe layer.
+_SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9_.\-]{0,253}[A-Za-z0-9])?$")
+_RESERVED_ITEM_NAMES = frozenset({"report.pdf", "manifest.json", "manifest.sig"})
+
+
+def _validate_item_name(name: str) -> str:
+    if not _SAFE_NAME_RE.match(name):
+        raise ValueError(
+            f"evidence-packager: unsafe item name {name!r}; "
+            "must match [A-Za-z0-9][A-Za-z0-9_.-]*[A-Za-z0-9]"
+        )
+    if name in _RESERVED_ITEM_NAMES:
+        raise ValueError(
+            f"evidence-packager: item name {name!r} collides with a packager-managed artifact"
+        )
+    return name
+
 
 @dataclass(frozen=True)
 class EvidenceItem:
@@ -29,6 +52,9 @@ class EvidenceItem:
     content_type: str
     bytes: bytes
     rule_version_id: str | None = None
+
+    def __post_init__(self) -> None:
+        _validate_item_name(self.name)
 
 
 @dataclass(frozen=True)

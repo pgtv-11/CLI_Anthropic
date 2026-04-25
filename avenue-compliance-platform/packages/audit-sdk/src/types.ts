@@ -52,7 +52,13 @@ export const AuditEventInputSchema = z.object({
 });
 export type AuditEventInput = z.infer<typeof AuditEventInputSchema>;
 
+// Bumped when the *hashed* shape of an audit event changes. ``verifyChain``
+// dispatches on this so events recorded under v1 (no outcome/outcomeHash in
+// the chain hash) and v2 (outcome+outcomeHash hashed) can both verify.
+export const AUDIT_EVENT_SCHEMA_VERSION = 2 as const;
+
 export interface AuditEvent {
+  schemaVersion: 1 | 2;
   eventId: string;
   ts: string;
   actor: string;

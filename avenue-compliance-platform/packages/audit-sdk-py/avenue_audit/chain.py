@@ -69,8 +69,12 @@ class AuditEventInput(BaseModel):
         return v
 
 
+AUDIT_EVENT_SCHEMA_VERSION = 2
+
+
 @dataclass
 class AuditEvent:
+    schema_version: int
     event_id: str
     ts: str
     actor: str
@@ -159,6 +163,7 @@ class AuditClient:
         for _ in range(self._max_retries):
             prev = self._head.get()
             partial = {
+                "schema_version": AUDIT_EVENT_SCHEMA_VERSION,
                 "event_id": event_id,
                 "ts": ts,
                 "actor": parsed.actor,
@@ -188,13 +193,20 @@ class AuditClient:
         raise RuntimeError("audit-sdk: chain head contention exceeded retries")
 
 
+_V1_DROPPED_FROM_HASH = {"chain_hash", "schema_version", "outcome", "outcome_hash"}
+
+
 def verify_chain(events: list[AuditEvent]) -> tuple[bool, Optional[str]]:
     prev = GENESIS_HASH
     for ev in events:
         if ev.prev_chain_hash != prev:
             return False, ev.event_id
-        rest = {k: v for k, v in asdict(ev).items() if k != "chain_hash"}
-        recomputed = sha256_hex(canonical_json(rest))
+        all_fields = asdict(ev)
+        if ev.schema_version == 1:
+            hashed_shape = {k: v for k, v in all_fields.items() if k not in _V1_DROPPED_FROM_HASH}
+        else:
+            hashed_shape = {k: v for k, v in all_fields.items() if k != "chain_hash"}
+        recomputed = sha256_hex(canonical_json(hashed_shape))
         if recomputed != ev.chain_hash:
             return False, ev.event_id
         prev = ev.chain_hash

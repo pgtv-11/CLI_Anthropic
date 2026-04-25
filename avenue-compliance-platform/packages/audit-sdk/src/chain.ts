@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { GENESIS_HASH, canonicalJson, hashPayload, sha256Hex } from './hash.js';
 import {
+  AUDIT_EVENT_SCHEMA_VERSION,
   AuditEvent,
   AuditEventInput,
   AuditEventInputSchema,
@@ -64,6 +65,7 @@ export class AuditClient {
     for (let attempt = 0; attempt < this.maxRetries; attempt++) {
       const prev = await this.head.get();
       const partial: Omit<AuditEvent, 'chainHash'> = {
+        schemaVersion: AUDIT_EVENT_SCHEMA_VERSION,
         eventId,
         ts,
         actor: parsed.actor,
@@ -101,7 +103,17 @@ export function verifyChain(events: AuditEvent[]): { valid: boolean; brokenAt?: 
   for (const ev of events) {
     if (ev.prevChainHash !== prev) return { valid: false, brokenAt: ev.eventId };
     const { chainHash, ...rest } = ev;
-    const recomputed = sha256Hex(canonicalJson(rest));
+    // Schema-version dispatch: v1 events did not include outcome/outcomeHash
+    // in the hashed body. Strip those fields when verifying a v1 record so
+    // archived chains stay valid after the v2 upgrade.
+    const hashedShape =
+      ev.schemaVersion === 1
+        ? (() => {
+            const { outcome: _o, outcomeHash: _oh, schemaVersion: _sv, ...v1 } = rest;
+            return v1;
+          })()
+        : rest;
+    const recomputed = sha256Hex(canonicalJson(hashedShape));
     if (recomputed !== chainHash) return { valid: false, brokenAt: ev.eventId };
     prev = chainHash;
   }

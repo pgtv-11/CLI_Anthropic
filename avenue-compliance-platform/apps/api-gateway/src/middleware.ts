@@ -66,6 +66,24 @@ export async function gate<T>(
     throw err;
   }
 
+  // Two-phase audit: (1) intent recorded BEFORE the handler runs, so a
+  // crashed audit sink fails-closed before any state mutation; (2) outcome
+  // recorded AFTER the handler returns. The intent record carries
+  // outcome=UNKNOWN; reconciliation jobs flag any UNKNOWN that has no
+  // corresponding outcome record within the SLA window.
+  await ctx.audit.record({
+    actor: req.subject.id,
+    actorRole: req.subject.roles[0] ?? 'unknown',
+    actorCrd: req.subject.crd,
+    action: mapAction(action),
+    target: { kind: resource.kind, id: resource.id },
+    requestId: req.requestId,
+    sessionId: req.sessionId,
+    ip: req.ip,
+    outcome: 'UNKNOWN',
+    outcomeDetails: { phase: 'intent' },
+  });
+
   let outcome: 'SUCCESS' | 'HANDLER_ERROR' = 'SUCCESS';
   let handlerError: Error | undefined;
   let result: T | undefined;
@@ -76,20 +94,33 @@ export async function gate<T>(
     handlerError = err as Error;
   }
 
-  await ctx.audit.record({
-    actor: req.subject.id,
-    actorRole: req.subject.roles[0] ?? 'unknown',
-    actorCrd: req.subject.crd,
-    action: mapAction(action),
-    target: { kind: resource.kind, id: resource.id },
-    requestId: req.requestId,
-    sessionId: req.sessionId,
-    ip: req.ip,
-    outcome,
-    outcomeDetails: handlerError
-      ? { errorClass: handlerError.constructor.name, message: handlerError.message }
-      : undefined,
-  });
+  try {
+    await ctx.audit.record({
+      actor: req.subject.id,
+      actorRole: req.subject.roles[0] ?? 'unknown',
+      actorCrd: req.subject.crd,
+      action: mapAction(action),
+      target: { kind: resource.kind, id: resource.id },
+      requestId: req.requestId,
+      sessionId: req.sessionId,
+      ip: req.ip,
+      outcome,
+      outcomeDetails: handlerError
+        ? { errorClass: handlerError.constructor.name, message: handlerError.message }
+        : { phase: 'outcome' },
+    });
+  } catch (auditErr) {
+    // The handler already mutated state. Surface a 5xx so the caller cannot
+    // assume success; reconciliation will pair the orphaned intent record
+    // with the actual mutation later. Critically: never swallow the audit
+    // failure — fail loudly so on-call sees the gap.
+    const fatal = new Error(
+      `audit_sink_failure_after_handler: ${(auditErr as Error).message}; ` +
+        `request=${req.requestId} target=${resource.kind}:${resource.id}`,
+    );
+    (fatal as Error & { statusCode: number }).statusCode = 500;
+    throw fatal;
+  }
 
   if (handlerError) throw handlerError;
   return result as T;

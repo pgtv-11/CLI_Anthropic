@@ -48,10 +48,20 @@ export const REG_BI_THRESHOLDS: ReadonlyArray<RegBIThresholds> = [
   },
 ];
 
+export class UnknownRuleVersionError extends Error {
+  constructor(public readonly ruleVersionId: string) {
+    super(`Reg BI thresholds not found for ruleVersionId=${ruleVersionId}`);
+    this.name = 'UnknownRuleVersionError';
+  }
+}
+
 export function getThresholds(ruleVersionId: string): RegBIThresholds {
   const found = REG_BI_THRESHOLDS.find((t) => t.ruleVersionId === ruleVersionId);
   if (!found) {
-    throw new Error(`Reg BI thresholds not found for ruleVersionId=${ruleVersionId}`);
+    // Fail-closed: callers should map this to a POLICY_DENY audit outcome
+    // rather than an opaque HANDLER_ERROR, so the audit log records the
+    // attempt with the offending ruleVersionId for examiner review.
+    throw new UnknownRuleVersionError(ruleVersionId);
   }
   return found;
 }
